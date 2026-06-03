@@ -33,10 +33,10 @@
   #jumpBtn { right:30px; bottom:30px; width:108px; height:108px; font-size:18px; background:radial-gradient(circle at 40% 35%,#7be88a,#2bb34a); }
   #actBtn { right:150px; bottom:60px; width:92px; height:92px; font-size:15px; background:radial-gradient(circle at 40% 35%,#ffd36e,#e8902b); }
 
-  #toasts { position:fixed; top:60px; right:12px; display:flex; flex-direction:column; gap:7px; pointer-events:none; align-items:flex-end; z-index:30; }
-  .toast { background:rgba(20,26,55,.92); border-left:4px solid #6ee7ff; color:#fff; padding:8px 13px; border-radius:10px; font-size:13px; box-shadow:0 6px 16px rgba(0,0,0,.4); animation:slideIn .3s ease; max-width:280px; }
+  #toasts { position:fixed; top:72px; left:50%; transform:translateX(-50%); display:flex; flex-direction:column; gap:10px; pointer-events:none; align-items:center; z-index:30; width:max-content; max-width:92vw; }
+  .toast { background:rgba(20,26,55,.94); border-left:5px solid #6ee7ff; color:#fff; padding:14px 22px; border-radius:14px; font-size:18px; font-weight:bold; line-height:1.35; box-shadow:0 8px 22px rgba(0,0,0,.5); animation:slideIn .3s ease; max-width:460px; text-align:center; }
   .toast.coin { border-left-color:#ffd23f; } .toast.bad { border-left-color:#ff6b6b; }
-  @keyframes slideIn { from{opacity:0; transform:translateX(30px);} to{opacity:1; transform:none;} }
+  @keyframes slideIn { from{opacity:0; transform:translateY(-22px);} to{opacity:1; transform:none;} }
 
   .modal { position:fixed; inset:0; background:radial-gradient(circle at 50% 30%, rgba(26,36,82,.96), rgba(7,10,28,.97) 80%); display:flex; align-items:center; justify-content:center; z-index:50; }
   .panel { width:min(560px,93vw); max-height:90vh; overflow:auto; background:rgba(12,17,40,.97); border:2px solid rgba(255,255,255,.18); border-radius:20px; padding:24px 26px; color:#e8ecff; box-shadow:0 20px 60px rgba(0,0,0,.6); }
@@ -84,7 +84,7 @@
   <div id="intro" class="modal">
     <div class="panel">
       <h1>🎈 루이지 풍선월드</h1>
-      <div class="sub">마리오 오디세이와 비슷하게 왕국에서 풍선을 숨기고 찾아라!</div>
+      <div class="sub">마리오 오디세이풍 왕국에서 풍선을 숨기고 찾아라!</div>
       <h2>🎮 조작 (키보드 / 터치)</h2>
       <ul>
         <li>이동: <kbd>←</kbd><kbd>→</kbd> 또는 <kbd>A</kbd><kbd>D</kbd> / 왼쪽 <b>조이스틱</b></li>
@@ -122,7 +122,7 @@ function load(){ try{ return JSON.parse(localStorage.getItem(SAVE_KEY))||null; }
 
 //============ 상태 ============
 const G = { coins:500, found:0, mode:"hide", running:false, timeLeft:0 };
-const FIND_COST=200, FIND_TIME=30, BASE_VALUE=130, BOT_BASE=90, POP_RANGE=75, PLACE_RANGE=75;
+const FIND_COST=200, FIND_TIME=30, BASE_VALUE=130, BOT_BASE=90, POP_RANGE=68, PLACE_RANGE=75;
 const saved=load(); if(saved){ G.coins=saved.coins??500; G.found=saved.found??0; }
 
 const RANK_TIERS=[
@@ -138,10 +138,10 @@ function diffMult(d){ return 0.8+d*0.35; }
 function balloonReward(b){ return Math.round(BASE_VALUE*b.rankMult*diffMult(b.diff)); }
 
 //============ 월드 (완만한 계단형 — 오르기 쉽게) ============
-const WORLD={ w:4200, h:1640 };
+const WORLD={ w:5600, h:1640 };
 // 발판: 세로 간격 약 110px, 가로 간격 작게 → 점프로 통과 (살짝 도전적)
 const platforms=[
-  {x:0,    y:1540, w:4200, h:100, type:"ground"},
+  {x:0,    y:1540, w:5600, h:100, type:"ground"},
   // 메인 계단 (좌하 → 우상)
   {x:160,  y:1410, w:240, h:24, type:"grass"},
   {x:460,  y:1300, w:240, h:24, type:"grass"},
@@ -168,6 +168,20 @@ const platforms=[
   {x:3340, y:745,  w:220, h:24, type:"grass"},
   {x:3060, y:635,  w:220, h:24, type:"wood"},
   {x:3300, y:560,  w:280, h:24, type:"stone"},   // 동쪽 봉우리
+  // 동쪽 확장 2 (더 멀리)
+  {x:4050, y:1410, w:220, h:24, type:"grass"},
+  {x:4350, y:1300, w:220, h:24, type:"wood"},
+  {x:4650, y:1190, w:220, h:24, type:"stone"},
+  {x:4950, y:1080, w:220, h:24, type:"grass"},
+  {x:5250, y:970,  w:220, h:24, type:"wood"},
+  {x:5050, y:855,  w:220, h:24, type:"stone"},
+  {x:4780, y:745,  w:220, h:24, type:"grass"},
+  {x:5020, y:640,  w:260, h:24, type:"stone"},   // 동쪽 끝 봉우리
+  // 위로 솟은 첨탑 (성 위로)
+  {x:980,  y:450,  w:220, h:24, type:"stone"},
+  {x:1240, y:350,  w:200, h:24, type:"wood"},
+  {x:1000, y:250,  w:200, h:24, type:"grass"},
+  {x:1180, y:160,  w:240, h:24, type:"stone"},   // 최상층
 ];
 // 사다리 (큰 상승 구간 단축 / 대체 경로)
 const ladders=[
@@ -177,6 +191,9 @@ const ladders=[
   {x:2380, y:1410, w:28, h:130},   // 동쪽 진입
   {x:2900, y:1080, w:28, h:300},   // 동쪽 단축
   {x:3560, y:745,  w:28, h:175},   // 동쪽 상층
+  {x:4280, y:1410, w:28, h:130},   // 동쪽2 진입
+  {x:4880, y:1080, w:28, h:330},   // 동쪽2 단축
+  {x:1080, y:250,  w:28, h:200},   // 첨탑 단축
 ];
 
 const hideSpots=[
@@ -203,6 +220,16 @@ const hideSpots=[
   {x:3450, y:721,  kind:"pot",  diff:5},
   {x:3170, y:611,  kind:"box",  diff:5},
   {x:3440, y:536,  kind:"bush", diff:5},
+  // 동쪽 확장 2
+  {x:4150, y:1386, kind:"pot",  diff:3},
+  {x:4450, y:1276, kind:"box",  diff:4},
+  {x:4750, y:1166, kind:"bush", diff:4},
+  {x:5350, y:946,  kind:"pot",  diff:5},
+  {x:5120, y:616,  kind:"box",  diff:5},
+  // 첨탑
+  {x:1080, y:426,  kind:"bush", diff:5},
+  {x:1290, y:326,  kind:"pot",  diff:5},
+  {x:1290, y:136,  kind:"box",  diff:5},   // 최상층
 ];
 
 const npcs=[
@@ -211,6 +238,8 @@ const npcs=[
   {x:1480, y:964,  name:"키노피오", color:"#3498db", lines:["먼저 풍선을 고르고 200코인 선불!","30초 안에 터트려야 해."]},
   {x:3740, y:854,  name:"요시",     color:"#2ecc71", lines:["동쪽 언덕에도 풍선이 많아!","아래 방향키(↓)로 터트려."]},
   {x:3440, y:554,  name:"쿠파주니어", color:"#9b59b6", lines:["여기까지 오다니!","높은 랭크 풍선이 제일 비싸지."]},
+  {x:1280, y:154,  name:"로젤리나",   color:"#cdb4ff", lines:["여긴 왕국의 최상층!","최고 난이도 풍선이 숨어있어."]},
+  {x:5140, y:634,  name:"데이지",     color:"#ffcf3f", lines:["동쪽 끝까지 왔구나!","멀리 올수록 보상도 커져."]},
 ];
 
 //============ 봇 풍선 ============
@@ -218,7 +247,7 @@ let balloons=[];
 const BALLOON_COLORS=["#ff5d5d","#ffd23f","#5dd6ff","#7be88a","#c98bff","#ff9ec7","#ffa94d"];
 function spawnBots(){
   balloons=[];
-  const idxs=hideSpots.map((_,i)=>i).sort(()=>Math.random()-.5).slice(0,16);
+  const idxs=hideSpots.map((_,i)=>i).sort(()=>Math.random()-.5).slice(0,20);
   for(const i of idxs){
     const s=hideSpots[i]; const tier=RANK_TIERS[Math.floor(Math.random()*RANK_TIERS.length)];
     balloons.push({spot:i,x:s.x,y:s.y-30,diff:s.diff,
@@ -321,7 +350,7 @@ function doAction(){
 //============ 봇이 내 풍선 찾기 ============
 setInterval(()=>{
   if(!G.running||!myBalloon.placed) return;
-  const p=0.30*(6-myBalloon.diff)/5;
+  const p=0.24*(6-myBalloon.diff)/5;
   if(Math.random()<p){
     const r=rankOf(G.found),reward=Math.round(BOT_BASE*r.mult*diffMult(myBalloon.diff));
     G.coins+=reward; const bn=BOT_NAMES[Math.floor(Math.random()*BOT_NAMES.length)];
@@ -339,7 +368,7 @@ function popFx(x,y,color,reward){
 }
 const toastBox=document.getElementById("toasts");
 function toast(msg,cls=""){ const el=document.createElement("div"); el.className="toast "+cls; el.textContent=msg; toastBox.appendChild(el);
-  setTimeout(()=>{el.style.transition="opacity .4s,transform .4s";el.style.opacity="0";el.style.transform="translateX(30px)";setTimeout(()=>el.remove(),400);},3400);
+  setTimeout(()=>{el.style.transition="opacity .4s,transform .4s";el.style.opacity="0";el.style.transform="translateY(-22px)";setTimeout(()=>el.remove(),400);},3400);
   while(toastBox.children.length>5)toastBox.firstChild.remove(); }
 
 //============ HUD ============
