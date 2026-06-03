@@ -21,9 +21,10 @@
   #modeBtn.find { background:#1f6feb; border-color:#4d9bff; }
   #modeBtn.hide { background:#d9853b; border-color:#ffba6e; }
 
-  #controls { position:fixed; bottom:0; left:0; right:0; height:200px; pointer-events:none; z-index:10; }
-  #joy { position:absolute; left:24px; bottom:26px; width:150px; height:150px; border-radius:50%;
-         background:radial-gradient(circle at 50% 40%, rgba(255,255,255,.13), rgba(20,28,60,.55)); border:3px solid rgba(255,255,255,.22); pointer-events:auto; }
+  #controls { position:fixed; inset:0; pointer-events:none; z-index:10; }
+  #joyZone { position:absolute; left:0; top:0; width:50%; height:100%; pointer-events:auto; touch-action:none; }
+  #joy { position:absolute; width:150px; height:150px; margin:-75px 0 0 -75px; border-radius:50%;
+         background:radial-gradient(circle at 50% 40%, rgba(255,255,255,.13), rgba(20,28,60,.55)); border:3px solid rgba(255,255,255,.22); pointer-events:none; }
   #knob { position:absolute; left:50%; top:50%; width:64px; height:64px; margin:-32px 0 0 -32px; border-radius:50%;
           background:radial-gradient(circle at 40% 35%, #fff, #9fb2ff); border:2px solid rgba(255,255,255,.6); box-shadow:0 5px 14px rgba(0,0,0,.4); }
   .actbtn { position:absolute; border-radius:50%; pointer-events:auto; display:flex; flex-direction:column; align-items:center; justify-content:center;
@@ -74,7 +75,8 @@
   </div>
 
   <div id="controls">
-    <div id="joy"><div id="knob"></div></div>
+    <div id="joyZone"></div>
+    <div id="joy" class="hidden"><div id="knob"></div></div>
     <div class="actbtn" id="actBtn">액션<small>↓</small></div>
     <div class="actbtn" id="jumpBtn">점프<small>Space</small></div>
   </div>
@@ -87,10 +89,10 @@
       <div class="sub">마리오 오디세이풍 왕국에서 풍선을 숨기고 찾아라!</div>
       <h2>🎮 조작 (키보드 / 터치)</h2>
       <ul>
-        <li>이동: <kbd>←</kbd><kbd>→</kbd> 또는 <kbd>A</kbd><kbd>D</kbd> / 왼쪽 <b>조이스틱</b></li>
+        <li>이동: <kbd>←</kbd><kbd>→</kbd> 또는 <kbd>A</kbd><kbd>D</kbd> / 왼쪽 화면 <b>드래그</b></li>
         <li><b>점프: <kbd>Space</kbd> · <kbd>↑</kbd> · <kbd>W</kbd></b> / 점프 버튼</li>
         <li><b>액션(숨기기·터트리기): <kbd>↓</kbd> 아래 방향키</b> / 액션 버튼</li>
-        <li>사다리: 사다리에 겹친 채 올라가기 <kbd>↑</kbd> · 내려가기 <kbd>S</kbd> 또는 조이스틱</li>
+        <li>사다리: 사다리에 겹친 채 올라가기 <kbd>↑</kbd> · 내려가기 <kbd>S</kbd> 또는 드래그 위·아래</li>
       </ul>
       <h2>📜 규칙</h2>
       <ul>
@@ -276,12 +278,19 @@ addEventListener("keydown",e=>{
 addEventListener("keyup",e=>{ keys[e.code]=false; });
 
 const joyState={mx:0,up:false,down:false};
-const joy=document.getElementById("joy"),knob=document.getElementById("knob"); let joyId=null;
-function joyMove(e){ const r=joy.getBoundingClientRect(),cx=r.left+r.width/2,cy=r.top+r.height/2; let dx=e.clientX-cx,dy=e.clientY-cy; const max=r.width/2,d=Math.hypot(dx,dy); if(d>max){dx*=max/d;dy*=max/d;} knob.style.transform=`translate(${dx}px,${dy}px)`; joyState.mx=Math.abs(dx)>12?Math.max(-1,Math.min(1,dx/max)):0; joyState.up=dy<-max*0.4; joyState.down=dy>max*0.4; }
-joy.addEventListener("pointerdown",e=>{joyId=e.pointerId;joy.setPointerCapture(e.pointerId);joyMove(e);});
-joy.addEventListener("pointermove",e=>{if(e.pointerId===joyId)joyMove(e);});
-function joyEnd(e){ if(e.pointerId===joyId){joyId=null;knob.style.transform="translate(0,0)";joyState.mx=0;joyState.up=false;joyState.down=false;} }
-joy.addEventListener("pointerup",joyEnd); joy.addEventListener("pointercancel",joyEnd);
+const joyZone=document.getElementById("joyZone"),joy=document.getElementById("joy"),knob=document.getElementById("knob");
+let joyId=null,joyOX=0,joyOY=0; const JOY_MAX=60;
+function joyStart(e){ if(joyId!==null)return; joyId=e.pointerId; joyZone.setPointerCapture(e.pointerId);
+  joyOX=e.clientX; joyOY=e.clientY; joy.style.left=joyOX+"px"; joy.style.top=joyOY+"px";
+  joy.classList.remove("hidden"); knob.style.transform="translate(0,0)"; }
+function joyMove(e){ if(e.pointerId!==joyId)return; let dx=e.clientX-joyOX,dy=e.clientY-joyOY;
+  const d=Math.hypot(dx,dy); if(d>JOY_MAX){dx*=JOY_MAX/d;dy*=JOY_MAX/d;}
+  knob.style.transform=`translate(${dx}px,${dy}px)`;
+  joyState.mx=Math.abs(dx)>10?Math.max(-1,Math.min(1,dx/JOY_MAX)):0; joyState.up=dy<-JOY_MAX*0.4; joyState.down=dy>JOY_MAX*0.4; }
+function joyEnd(e){ if(e.pointerId!==joyId)return; joyId=null; joy.classList.add("hidden"); joyState.mx=0; joyState.up=false; joyState.down=false; }
+joyZone.addEventListener("pointerdown",e=>{e.preventDefault();joyStart(e);});
+joyZone.addEventListener("pointermove",joyMove);
+joyZone.addEventListener("pointerup",joyEnd); joyZone.addEventListener("pointercancel",joyEnd);
 
 const jumpBtn=document.getElementById("jumpBtn"),actBtn=document.getElementById("actBtn");
 jumpBtn.addEventListener("pointerdown",e=>{e.preventDefault();jumpQueued=true;});
