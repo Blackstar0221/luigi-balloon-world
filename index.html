@@ -91,6 +91,8 @@
         <li><b>점프: <kbd>Space</kbd> · <kbd>↑</kbd> · <kbd>W</kbd></b> / 점프 버튼</li>
         <li><b>액션(숨기기·터트리기): <kbd>↓</kbd> 아래 방향키</b> / 액션 버튼</li>
         <li>사다리: 사다리에 겹친 채 올라가기 <kbd>↑</kbd> · 내려가기 <kbd>S</kbd> 또는 조이스틱</li>
+        <li>⚠️ <b>가시밭</b>은 닿으면 출발점으로! <b>구름 발판</b>·<b>분홍 점프대</b>를 활용해 건너세요.</li>
+        <li>🎈 풍선은 <b>무한히 다시 생성</b>됩니다 — 계속 찾아 랭크를 올리세요.</li>
       </ul>
       <h2>📜 규칙</h2>
       <ul>
@@ -182,7 +184,12 @@ const platforms=[
   {x:1240, y:350,  w:200, h:24, type:"wood"},
   {x:1000, y:250,  w:200, h:24, type:"grass"},
   {x:1180, y:160,  w:240, h:24, type:"stone"},   // 최상층
+  // 구름(움직이는) 발판 — 가시 구덩이 위를 건너는 길
+  {x:1950, y:1410, w:150, h:22, type:"cloud", move:{axis:"x", range:150, spd:1.1, phase:0}},
+  {x:3870, y:1410, w:150, h:22, type:"cloud", move:{axis:"x", range:150, spd:0.9, phase:1.5}},
+  {x:5050, y:520,  w:130, h:22, type:"cloud", move:{axis:"y", range:130, spd:0.8, phase:0}},  // 동쪽 끝 엘리베이터
 ];
+for(const p of platforms){ if(p.move){ p.baseX=p.x; p.baseY=p.y; p._dx=0; p._dy=0; } }
 // 사다리 (큰 상승 구간 단축 / 대체 경로)
 const ladders=[
   {x:380,  y:1410, w:28, h:130},
@@ -194,6 +201,18 @@ const ladders=[
   {x:4280, y:1410, w:28, h:130},   // 동쪽2 진입
   {x:4880, y:1080, w:28, h:330},   // 동쪽2 단축
   {x:1080, y:250,  w:28, h:200},   // 첨탑 단축
+];
+
+// 가시밭 (닿으면 출발점으로) — 지면/발판 구덩이
+const hazards=[
+  {x:1950, y:1516, w:130, h:24},   // 메인 ↔ 동쪽 사이 구덩이
+  {x:3870, y:1516, w:130, h:24},   // 동쪽 ↔ 동쪽2 사이 구덩이
+  {x:1060, y:1062, w:90,  h:16},   // 발판 위 가시 (메인 계단)
+];
+// 점프대 (밟으면 높이 튕김)
+const bouncers=[
+  {x:700,  y:1524, w:74, h:14},
+  {x:4520, y:1524, w:74, h:14},
 ];
 
 const hideSpots=[
@@ -240,29 +259,41 @@ const npcs=[
   {x:3440, y:554,  name:"쿠파주니어", color:"#9b59b6", lines:["여기까지 오다니!","높은 랭크 풍선이 제일 비싸지."]},
   {x:1280, y:154,  name:"로젤리나",   color:"#cdb4ff", lines:["여긴 왕국의 최상층!","최고 난이도 풍선이 숨어있어."]},
   {x:5140, y:634,  name:"데이지",     color:"#ffcf3f", lines:["동쪽 끝까지 왔구나!","멀리 올수록 보상도 커져."]},
+  {x:1860, y:1504, name:"가시 경비병", color:"#c0392b", lines:["앞은 가시밭이야! 점프해서 넘어!","움직이는 구름 발판을 타고 건너."]},
+  {x:660,  y:1504, name:"스프링 토끼", color:"#e67e22", lines:["분홍 점프대를 밟아봐!","높이높이 솟아오를 수 있어."]},
+  {x:5060, y:1504, name:"노랑 별",     color:"#f1c40f", lines:["풍선은 끝없이 다시 생겨나!","계속 찾아서 랭크를 올려봐."]},
 ];
 
 //============ 봇 풍선 ============
 let balloons=[];
 const BALLOON_COLORS=["#ff5d5d","#ffd23f","#5dd6ff","#7be88a","#c98bff","#ff9ec7","#ffa94d"];
-function spawnBots(){
-  balloons=[];
-  const idxs=hideSpots.map((_,i)=>i).sort(()=>Math.random()-.5).slice(0,20);
-  for(const i of idxs){
-    const s=hideSpots[i]; const tier=RANK_TIERS[Math.floor(Math.random()*RANK_TIERS.length)];
-    balloons.push({spot:i,x:s.x,y:s.y-30,diff:s.diff,
-      botName:BOT_NAMES[Math.floor(Math.random()*BOT_NAMES.length)],
-      rankName:tier.name,rankMult:tier.mult,rankColor:tier.color,
-      color:BALLOON_COLORS[Math.floor(Math.random()*BALLOON_COLORS.length)],
-      popped:false,targeted:false});
-  }
+const BOT_TARGET=20;   // 동시에 떠 있는 봇 풍선 목표 수
+function spawnOneBot(){
+  const taken=new Set(balloons.filter(b=>!b.popped).map(b=>b.spot));
+  if(myBalloon&&myBalloon.placed) taken.add(myBalloon.spot);
+  const free=hideSpots.map((_,i)=>i).filter(i=>!taken.has(i));
+  if(!free.length) return false;
+  const i=free[Math.floor(Math.random()*free.length)];
+  const s=hideSpots[i]; const tier=RANK_TIERS[Math.floor(Math.random()*RANK_TIERS.length)];
+  balloons.push({spot:i,x:s.x,y:s.y-30,diff:s.diff,
+    botName:BOT_NAMES[Math.floor(Math.random()*BOT_NAMES.length)],
+    rankName:tier.name,rankMult:tier.mult,rankColor:tier.color,
+    color:BALLOON_COLORS[Math.floor(Math.random()*BALLOON_COLORS.length)],
+    popped:false,targeted:false});
+  return true;
 }
-spawnBots();
+// 터진 풍선은 정리하고, 목표 수만큼 새 풍선을 무한히 채운다
+function replenishBots(){
+  balloons=balloons.filter(b=>!b.popped);
+  while(balloons.length<BOT_TARGET){ if(!spawnOneBot()) break; }
+}
+function spawnBots(){ balloons=[]; replenishBots(); }
 let activeTarget=null;
 const myBalloon={placed:false,spot:-1,x:0,y:0,diff:0};
+spawnBots();
 
 //============ 플레이어 ============
-const player={x:200,y:1480,w:26,h:42,vx:0,vy:0,onGround:false,onLadder:false,face:1,walk:0};
+const player={x:200,y:1480,w:26,h:42,vx:0,vy:0,onGround:false,onLadder:false,face:1,walk:0,standPlat:null};
 
 //============ 입력 ============
 const keys={}; let jumpQueued=false;
@@ -307,6 +338,7 @@ document.getElementById("closeTarget").addEventListener("click",()=>targetModal.
 targetBtn.addEventListener("click",openTargetModal);
 function openTargetModal(){
   if(activeTarget){ toast("이미 찾는 중인 풍선이 있어요"); return; }
+  replenishBots();
   targetList.innerHTML="";
   const avail=balloons.filter(b=>!b.popped).map(b=>({b,dist:Math.hypot(b.x-player.x,b.y-player.y)})).sort((a,b)=>a.dist-b.dist);
   if(!avail.length){ targetList.innerHTML='<div style="opacity:.7;padding:10px">남은 풍선이 없어요. 초기화하면 다시 생성됩니다.</div>'; }
@@ -349,7 +381,7 @@ function doAction(){
     const before=rankOf(G.found-1).name,after=rankOf(G.found).name;
     toast(`🎉 ${b.botName}(${b.rankName}) 풍선 터트림! +${reward}🪙`,"coin");
     if(before!==after) toast(`🏆 랭크 상승! ${before} → ${after}`,"coin");
-    endFind(); updateHUD(); save();
+    endFind(); replenishBots(); updateHUD(); save();
   }
 }
 
@@ -386,9 +418,16 @@ function updateHUD(){
 }
 
 //============ 물리/업데이트 ============
-const GRAV=0.6, MOVE=4.5, JUMP=-15, CLIMB=3.4;
-const cam={x:0,y:0};
+const GRAV=0.6, MOVE=4.5, JUMP=-15, CLIMB=3.4, BOUNCE=-25;
+const cam={x:0,y:0}; let animT=0;
 function update(dt){
+  animT+=dt;
+  // 움직이는 발판 위치 갱신
+  for(const p of platforms){ if(!p.move) continue;
+    const off=Math.sin(animT*p.move.spd+p.move.phase)*p.move.range;
+    if(p.move.axis==="x"){ const nx=p.baseX+off; p._dx=nx-p.x; p.x=nx; p._dy=0; }
+    else { const ny=p.baseY+off; p._dy=ny-p.y; p.y=ny; p._dx=0; }
+  }
   // 입력 종합
   let mx=joyState.mx;
   if(keys["ArrowLeft"]||keys["KeyA"]) mx=-1;
@@ -414,15 +453,21 @@ function update(dt){
   } else {
     if(jumpQueued&&player.onGround){ player.vy=JUMP; player.onGround=false; }
     player.vy+=GRAV; if(player.vy>18)player.vy=18;
-    const prevBottom=player.y+player.h; player.y+=player.vy; player.onGround=false;
+    const prevBottom=player.y+player.h; player.y+=player.vy; player.onGround=false; player.standPlat=null;
     for(const p of platforms){
       const within=player.x+player.w>p.x+4&&player.x<p.x+p.w-4; if(!within)continue;
       const top=p.y;
       if(p.type==="ground"){ if(player.y+player.h>top&&player.y<top){ player.y=top-player.h; player.vy=0; player.onGround=true; } }
-      else if(player.vy>=0&&prevBottom<=top+2&&player.y+player.h>=top&&player.y+player.h<=top+player.vy+6){ player.y=top-player.h; player.vy=0; player.onGround=true; }
+      else if(player.vy>=0&&prevBottom<=top+2&&player.y+player.h>=top&&player.y+player.h<=top+Math.abs(player.vy)+8){ player.y=top-player.h; player.vy=0; player.onGround=true; player.standPlat=p; }
     }
+    // 점프대: 위에서 밟으면 높이 튕김
+    if(player.vy>=0){ for(const bp of bouncers){ if(player.x+player.w>bp.x&&player.x<bp.x+bp.w&&prevBottom<=bp.y+4&&player.y+player.h>=bp.y){ player.y=bp.y-player.h; player.vy=BOUNCE; player.onGround=false; player.standPlat=null; break; } } }
+    // 가로로 움직이는 발판에 올라타면 같이 끌려간다 (세로는 충돌 처리가 위치를 잡아줌)
+    if(player.standPlat&&player.standPlat.move&&player.standPlat.move.axis==="x"){ player.x+=player.standPlat._dx; player.x=Math.max(0,Math.min(WORLD.w-player.w,player.x)); }
   }
   if(player.y>WORLD.h){ player.y=1480; player.x=200; player.vy=0; toast("떨어졌어요! 출발점으로 복귀",""); }
+  // 가시밭: 닿으면 출발점으로
+  for(const h of hazards){ if(player.x+player.w>h.x&&player.x<h.x+h.w&&player.y+player.h>h.y&&player.y<h.y+h.h){ player.x=200; player.y=1480; player.vy=0; player.standPlat=null; toast("가시에 찔렸어요! 출발점으로 복귀","bad"); break; } }
   jumpQueued=false;
 
   // 카메라
@@ -452,6 +497,7 @@ function draw(){
   drawClouds(); drawCastle();
   for(const p of platforms) drawPlatform(p);
   for(const l of ladders) drawLadder(l);
+  drawHazards(); drawBouncers();
   hideSpots.forEach((s,i)=>drawSpot(s,i));
   // 타겟 비콘 + 타겟 풍선
   if(activeTarget){ drawBeacon(activeTarget); drawBalloon(activeTarget,false); }
@@ -472,8 +518,12 @@ function drawCastle(){ const bx=900,by=380;
   ctx.fillStyle="#9fd8ff"; for(const [wx,wy] of [[bx+40,by+45],[bx+185,by+45]]){ ctx.beginPath(); ctx.arc(wx,wy,15,0,7); ctx.fill(); } }
 function drawPlatform(p){
   if(p.type==="ground"){ ctx.fillStyle="#6b4f2a"; ctx.fillRect(p.x,p.y,p.w,p.h); ctx.fillStyle="#3fa34d"; ctx.fillRect(p.x,p.y,p.w,16); return; }
+  if(p.move){ ctx.fillStyle="rgba(200,220,255,.95)"; ctx.beginPath(); ctx.arc(p.x+24,p.y+12,18,0,7); ctx.arc(p.x+p.w-24,p.y+12,18,0,7); rrect(p.x+8,p.y,p.w-16,22,12); ctx.fill(); ctx.fillStyle="#fff"; rrect(p.x+8,p.y,p.w-16,8,8); ctx.fill(); return; }
   const cols={grass:["#5cc46a","#3fa34d"],wood:["#c08a4a","#9c6b34"],stone:["#b9c0cc","#8d96a6"]}[p.type];
   ctx.fillStyle=cols[1]; rrect(p.x,p.y,p.w,p.h+10,8); ctx.fill(); ctx.fillStyle=cols[0]; rrect(p.x,p.y,p.w,12,8); ctx.fill(); }
+function drawHazards(){ for(const h of hazards){ const n=Math.max(1,Math.round(h.w/16)),sw=h.w/n;
+  for(let i=0;i<n;i++){ ctx.fillStyle="#aab3c2"; ctx.beginPath(); ctx.moveTo(h.x+i*sw,h.y+h.h); ctx.lineTo(h.x+i*sw+sw/2,h.y); ctx.lineTo(h.x+(i+1)*sw,h.y+h.h); ctx.closePath(); ctx.fill(); ctx.strokeStyle="#5c6470"; ctx.lineWidth=1.5; ctx.stroke(); ctx.fillStyle="rgba(255,255,255,.7)"; ctx.beginPath(); ctx.moveTo(h.x+i*sw+sw/2,h.y); ctx.lineTo(h.x+i*sw+sw*0.62,h.y+h.h*0.5); ctx.lineTo(h.x+i*sw+sw/2,h.y+h.h*0.5); ctx.closePath(); ctx.fill(); } } }
+function drawBouncers(){ for(const bp of bouncers){ const sq=Math.sin(animT*6)*2; ctx.fillStyle="#ff5d8f"; rrect(bp.x,bp.y-sq,bp.w,bp.h+8+sq,7); ctx.fill(); ctx.fillStyle="#ffd23f"; for(let i=bp.x+8;i<bp.x+bp.w-6;i+=14) ctx.fillRect(i,bp.y+3-sq,7,4); ctx.strokeStyle="#c0395f"; ctx.lineWidth=2; rrect(bp.x,bp.y-sq,bp.w,bp.h+8+sq,7); ctx.stroke(); } }
 function drawLadder(l){ ctx.strokeStyle="#a9711f"; ctx.lineWidth=5; ctx.beginPath(); ctx.moveTo(l.x,l.y); ctx.lineTo(l.x,l.y+l.h); ctx.moveTo(l.x+l.w,l.y); ctx.lineTo(l.x+l.w,l.y+l.h); ctx.stroke(); ctx.lineWidth=4; for(let yy=l.y+12;yy<l.y+l.h;yy+=24){ ctx.beginPath(); ctx.moveTo(l.x,yy); ctx.lineTo(l.x+l.w,yy); ctx.stroke(); } }
 function drawSpot(s,i){
   const occupied=balloons.some(b=>!b.popped&&b.spot===i)||(myBalloon.placed&&myBalloon.spot===i);
