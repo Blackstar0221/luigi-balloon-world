@@ -33,10 +33,10 @@
   #jumpBtn { right:30px; bottom:30px; width:108px; height:108px; font-size:18px; color:#7be88a; border:3px solid rgba(123,232,138,.75); text-shadow:0 1px 3px rgba(0,0,0,.6); }
   #actBtn { right:150px; bottom:60px; width:92px; height:92px; font-size:15px; color:#ffd36e; border:3px solid rgba(255,211,110,.75); text-shadow:0 1px 3px rgba(0,0,0,.6); }
 
-  #toasts { position:fixed; top:72px; left:50%; transform:translateX(-50%); display:flex; flex-direction:column; gap:10px; pointer-events:none; align-items:center; z-index:30; width:max-content; max-width:92vw; }
-  .toast { background:rgba(20,26,55,.94); border-left:5px solid #6ee7ff; color:#fff; padding:14px 22px; border-radius:14px; font-size:18px; font-weight:bold; line-height:1.35; box-shadow:0 8px 22px rgba(0,0,0,.5); animation:slideIn .3s ease; max-width:460px; text-align:center; }
+  #toasts { position:fixed; top:64px; right:14px; left:auto; transform:none; display:flex; flex-direction:column; gap:8px; pointer-events:none; align-items:flex-end; z-index:30; max-width:min(340px,80vw); }
+  .toast { background:rgba(20,26,55,.94); border-left:5px solid #6ee7ff; color:#fff; padding:11px 16px; border-radius:12px; font-size:15px; font-weight:bold; line-height:1.35; box-shadow:0 8px 22px rgba(0,0,0,.5); animation:slideIn .3s ease; max-width:340px; text-align:left; }
   .toast.coin { border-left-color:#ffd23f; } .toast.bad { border-left-color:#ff6b6b; }
-  @keyframes slideIn { from{opacity:0; transform:translateY(-22px);} to{opacity:1; transform:none;} }
+  @keyframes slideIn { from{opacity:0; transform:translateX(40px);} to{opacity:1; transform:none;} }
 
   .modal { position:fixed; inset:0; background:radial-gradient(circle at 50% 30%, rgba(26,36,82,.96), rgba(7,10,28,.97) 80%); display:flex; align-items:center; justify-content:center; z-index:50; }
   .panel { width:min(560px,93vw); max-height:90vh; overflow:auto; background:rgba(12,17,40,.97); border:2px solid rgba(255,255,255,.18); border-radius:20px; padding:24px 26px; color:#e8ecff; box-shadow:0 20px 60px rgba(0,0,0,.6); }
@@ -143,7 +143,8 @@ function balloonReward(b){ return Math.round(BASE_VALUE*b.rankMult*diffMult(b.di
 const WORLD={ w:5600, h:1640 };
 // 발판: 세로 간격 약 110px, 가로 간격 작게 → 점프로 통과 (살짝 도전적)
 const platforms=[
-  {x:0,    y:1540, w:5600, h:100, type:"ground"},
+  {x:0,    y:1540, w:2540, h:100, type:"ground"},   // 구덩이 앞 지면
+  {x:2700, y:1540, w:2900, h:100, type:"ground"},   // 구덩이 뒤 지면
   // 메인 계단 (좌하 → 우상)
   {x:160,  y:1410, w:240, h:24, type:"grass"},
   {x:460,  y:1300, w:240, h:24, type:"grass"},
@@ -203,11 +204,13 @@ const ladders=[
   {x:1080, y:250,  w:28, h:200},   // 첨탑 단축
 ];
 
-// 가시밭 (닿으면 출발점으로) — 지면/발판 구덩이
+// 위험 지대 — kind:"pit"(구덩이) 는 빠지면, 그 외(가시)는 깊이 밟으면 출발점으로
+// 가시는 좁고 가장자리 판정이 너그러워 점프로 쉽게 넘을 수 있다
 const hazards=[
-  {x:1950, y:1516, w:130, h:24},   // 메인 ↔ 동쪽 사이 구덩이
-  {x:3870, y:1516, w:130, h:24},   // 동쪽 ↔ 동쪽2 사이 구덩이
-  {x:1060, y:1062, w:90,  h:16},   // 발판 위 가시 (메인 계단)
+  {x:1962, y:1522, w:86, h:18},                 // 메인 ↔ 동쪽 사이 가시 (좁게)
+  {x:3884, y:1522, w:86, h:18},                 // 동쪽 ↔ 동쪽2 사이 가시
+  {x:1082, y:1066, w:60, h:14},                 // 발판 위 가시 (작게)
+  {x:2540, y:1540, w:160, h:96, kind:"pit"},    // 바닥 구덩이 — 빠지면 가시와 같은 효과
 ];
 // 점프대 (밟으면 높이 튕김)
 const bouncers=[
@@ -406,7 +409,7 @@ function popFx(x,y,color,reward){
 }
 const toastBox=document.getElementById("toasts");
 function toast(msg,cls=""){ const el=document.createElement("div"); el.className="toast "+cls; el.textContent=msg; toastBox.appendChild(el);
-  setTimeout(()=>{el.style.transition="opacity .4s,transform .4s";el.style.opacity="0";el.style.transform="translateY(-22px)";setTimeout(()=>el.remove(),400);},3400);
+  setTimeout(()=>{el.style.transition="opacity .4s,transform .4s";el.style.opacity="0";el.style.transform="translateX(40px)";setTimeout(()=>el.remove(),400);},3400);
   while(toastBox.children.length>5)toastBox.firstChild.remove(); }
 
 //============ HUD ============
@@ -466,8 +469,14 @@ function update(dt){
     if(player.standPlat&&player.standPlat.move&&player.standPlat.move.axis==="x"){ player.x+=player.standPlat._dx; player.x=Math.max(0,Math.min(WORLD.w-player.w,player.x)); }
   }
   if(player.y>WORLD.h){ player.y=1480; player.x=200; player.vy=0; toast("떨어졌어요! 출발점으로 복귀",""); }
-  // 가시밭: 닿으면 출발점으로
-  for(const h of hazards){ if(player.x+player.w>h.x&&player.x<h.x+h.w&&player.y+player.h>h.y&&player.y<h.y+h.h){ player.x=200; player.y=1480; player.vy=0; player.standPlat=null; toast("가시에 찔렸어요! 출발점으로 복귀","bad"); break; } }
+  // 위험 지대: 구덩이는 빠지면, 가시는 깊이 밟으면 출발점으로
+  for(const h of hazards){
+    let hit=false;
+    if(h.kind==="pit"){ hit = player.x+player.w>h.x && player.x<h.x+h.w && player.y+player.h>h.y && player.y<h.y+h.h; }
+    else { const ins=12; hit = player.x+player.w>h.x+ins && player.x<h.x+h.w-ins && player.y+player.h>h.y+h.h*0.55 && player.y<h.y+h.h; }
+    if(hit){ player.x=200; player.y=1480; player.vy=0; player.standPlat=null;
+      toast(h.kind==="pit"?"구덩이에 빠졌어요! 출발점으로 복귀":"가시에 찔렸어요! 출발점으로 복귀","bad"); break; }
+  }
   jumpQueued=false;
 
   // 카메라
@@ -521,7 +530,19 @@ function drawPlatform(p){
   if(p.move){ ctx.fillStyle="rgba(200,220,255,.95)"; ctx.beginPath(); ctx.arc(p.x+24,p.y+12,18,0,7); ctx.arc(p.x+p.w-24,p.y+12,18,0,7); rrect(p.x+8,p.y,p.w-16,22,12); ctx.fill(); ctx.fillStyle="#fff"; rrect(p.x+8,p.y,p.w-16,8,8); ctx.fill(); return; }
   const cols={grass:["#5cc46a","#3fa34d"],wood:["#c08a4a","#9c6b34"],stone:["#b9c0cc","#8d96a6"]}[p.type];
   ctx.fillStyle=cols[1]; rrect(p.x,p.y,p.w,p.h+10,8); ctx.fill(); ctx.fillStyle=cols[0]; rrect(p.x,p.y,p.w,12,8); ctx.fill(); }
-function drawHazards(){ for(const h of hazards){ const n=Math.max(1,Math.round(h.w/16)),sw=h.w/n;
+function drawHazards(){ for(const h of hazards){
+  if(h.kind==="pit"){
+    // 어두운 구멍
+    ctx.fillStyle="#0a1024"; ctx.fillRect(h.x,h.y,h.w,h.h);
+    // 양옆 흙 단면 + 잔디 라인
+    ctx.fillStyle="#6b4f2a"; ctx.fillRect(h.x-4,h.y,8,h.h); ctx.fillRect(h.x+h.w-4,h.y,8,h.h);
+    ctx.fillStyle="#3fa34d"; ctx.fillRect(h.x-4,h.y,8,10); ctx.fillRect(h.x+h.w-4,h.y,8,10);
+    // 바닥 가시
+    const bn=Math.max(2,Math.round(h.w/22)),bw=h.w/bn,by=h.y+h.h;
+    for(let i=0;i<bn;i++){ ctx.fillStyle="#9aa3b2"; ctx.beginPath(); ctx.moveTo(h.x+i*bw,by); ctx.lineTo(h.x+i*bw+bw/2,by-18); ctx.lineTo(h.x+(i+1)*bw,by); ctx.closePath(); ctx.fill(); }
+    continue;
+  }
+  const n=Math.max(1,Math.round(h.w/16)),sw=h.w/n;
   for(let i=0;i<n;i++){ ctx.fillStyle="#aab3c2"; ctx.beginPath(); ctx.moveTo(h.x+i*sw,h.y+h.h); ctx.lineTo(h.x+i*sw+sw/2,h.y); ctx.lineTo(h.x+(i+1)*sw,h.y+h.h); ctx.closePath(); ctx.fill(); ctx.strokeStyle="#5c6470"; ctx.lineWidth=1.5; ctx.stroke(); ctx.fillStyle="rgba(255,255,255,.7)"; ctx.beginPath(); ctx.moveTo(h.x+i*sw+sw/2,h.y); ctx.lineTo(h.x+i*sw+sw*0.62,h.y+h.h*0.5); ctx.lineTo(h.x+i*sw+sw/2,h.y+h.h*0.5); ctx.closePath(); ctx.fill(); } } }
 function drawBouncers(){ for(const bp of bouncers){ const sq=Math.sin(animT*6)*2; ctx.fillStyle="#ff5d8f"; rrect(bp.x,bp.y-sq,bp.w,bp.h+8+sq,7); ctx.fill(); ctx.fillStyle="#ffd23f"; for(let i=bp.x+8;i<bp.x+bp.w-6;i+=14) ctx.fillRect(i,bp.y+3-sq,7,4); ctx.strokeStyle="#c0395f"; ctx.lineWidth=2; rrect(bp.x,bp.y-sq,bp.w,bp.h+8+sq,7); ctx.stroke(); } }
 function drawLadder(l){ ctx.strokeStyle="#a9711f"; ctx.lineWidth=5; ctx.beginPath(); ctx.moveTo(l.x,l.y); ctx.lineTo(l.x,l.y+l.h); ctx.moveTo(l.x+l.w,l.y); ctx.lineTo(l.x+l.w,l.y+l.h); ctx.stroke(); ctx.lineWidth=4; for(let yy=l.y+12;yy<l.y+l.h;yy+=24){ ctx.beginPath(); ctx.moveTo(l.x,yy); ctx.lineTo(l.x+l.w,yy); ctx.stroke(); } }
